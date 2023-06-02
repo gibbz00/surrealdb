@@ -127,22 +127,39 @@ impl Value {
 					try_join_all(futs).await?;
 					Ok(())
 				}
-				// Current path part is a thing
-				Value::Thing(v) => {
-					// Clone the thing
-					let val = v.clone();
-					// Fetch the remote embedded record
-					let stm = SelectStatement {
-						expr: Fields(vec![Field::All], false),
-						what: Values(vec![Value::from(val)]),
-						..SelectStatement::default()
-					};
-					*self = stm.compute(ctx, opt, txn, None).await?.first();
+				// Current path part is an object
+				Value::Object(object) => {
+					for (_, value) in object.into_iter() {
+						if let Value::Thing(thing) = value {
+							self.find_thing(ctx, opt, txn, path).await?;
+						}
+					}
 					Ok(())
 				}
+				// Current path part is a thing
+				Value::Thing(v) => self.find_thing(ctx, opt, txn, path).await,
 				// Ignore everything else
 				_ => Ok(()),
 			},
 		}
+	}
+
+	async fn find_thing(
+		&mut self,
+		ctx: &Context<'_>,
+		opt: &Options,
+		txn: &Transaction,
+		path: &[Part],
+	) -> Result<(), Error> {
+		// Clone the thing
+		let val = v.clone();
+		// Fetch the remote embedded record
+		let stm = SelectStatement {
+			expr: Fields(vec![Field::All], false),
+			what: Values(vec![Value::from(val)]),
+			..SelectStatement::default()
+		};
+		*self = stm.compute(ctx, opt, txn, None).await?.first();
+		Ok(())
 	}
 }
